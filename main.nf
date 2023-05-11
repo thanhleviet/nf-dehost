@@ -5,6 +5,8 @@ process FASTQC {
     
     label "CHANGE_ME"
     
+    conda "bioconda::fastqc"
+    
     tag {sample_id}
     
     cpus 4
@@ -25,9 +27,11 @@ process FASTP {
     
     label "CHANGE_ME"
     
+    conda "bioconda::fastp"
+
     tag {sample_id}
     
-    cpus 16
+    cpus 5
 
     input:
     tuple val(sample_id), path(reads)
@@ -38,10 +42,8 @@ process FASTP {
 
     """
     fastp -i ${reads[0]} \
-    -o /dev/null \
     -I ${reads[1]} \
-    -O 1>/dev/null \
-    -j \
+    -j fastp.json \
     -w ${task.cpus}
     mv fastp.json ${simple_sample_id}.fastp.json
     """
@@ -50,6 +52,7 @@ process FASTP {
 process BOWTIE2 {
     
     label "CHANGE_ME"
+    conda "bioconda::bowtie2=2.5.1 bioconda::samtools"
     
     tag {sample_id}
     
@@ -74,6 +77,8 @@ process MULTIQC {
     
     label "CHANGE_ME"
     
+    conda "bioconda::multiqc=1.14.0"
+    
     tag {"Running"}
     
     cpus 4
@@ -83,11 +88,32 @@ process MULTIQC {
 
     output:
     path("multiqc_*"), emit: report
+    path("sample_reads.tsv")
 
-    script:
+    shell:
     """
+    for f in *.json; do echo \$f,\$(jq .summary.after_filtering.total_reads \$f) | sed 's/.fastp.json//g';done > sample_reads.tsv
     multiqc .
     """
+}
+
+process fastqMergeLanes {
+  publishDir "${params.outdir}/${task.process.replaceAll(":","_")}", mode: 'copy'
+
+  tag { sampleName }
+  cpus 8 
+  
+  input:
+  tuple val(sampleName), path(forward), path(reverse)
+  
+  output:
+  tuple val(sampleName), path("${sampleName}_R1.fastq.gz"), path("${sampleName}_R2.fastq.gz")
+  
+  script:
+  """
+  zcat $forward | pigz -p ${task.cpus} - > ${sampleName}_R1.fastq.gz
+  zcat $reverse | pigz -p ${task.cpus} - > ${sampleName}_R2.fastq.gz
+  """
 }
 
 workflow FASTP_PRE_DEHOST {
@@ -108,12 +134,31 @@ workflow FASTP_POST_DEHOST {
     logs = FASTP.out.logs
 }
 
-ch_reads = Channel.fromPath(params.sample_sheet, checkIfExists: true)
+workflow wf_fastqMergeLanes {
+  take:
+    ch_filePairs
+  
+  main:
+    // Group 4 lane elements into 1 element in the channel
+    ch_filePairs
+            .map {
+            it -> [it[0].replaceAll(~/\_L00[1,2,3,4]/,""), it[1], it[2]]
+            }
+            .groupTuple(by:0)
+            .set { ch_reads_four_lanes }
+
+    fastqMergeLanes(ch_reads_four_lanes)
+  
+  emit: fastqMergeLanes.out
+}
+
+ch_input = Channel.fromPath(params.sample_sheet, checkIfExists: true)
     .splitCsv(header: true)
-    .map { row -> tuple(row.sample_id, [row.sr1, row.sr2]) }
+    .map { row -> tuple(row.sample_id, row.R1, row.R2) }
 
 ch_ref = Channel.fromPath(params.ref + "*.bt2", checkIfExists: true)
                 .collect()
+
 
 log.info("HUMAN READS REMOVAL")
 log.info("Sample sheet: " + params.sample_sheet)
@@ -121,6 +166,13 @@ log.info("Database    : " + params.ref)
 log.info("Outdir      : " + params.outdir)
 
 workflow {
+    if (params.merge_lanes) {
+        wf_fastqMergeLanes(ch_input)
+        ch_reads = wf_fastqMergeLanes.out.map {it -> tuple(it[0],[it[1],it[2]])}
+    } else {
+        ch_reads = ch_input
+    }
+
     FASTP_PRE_DEHOST(ch_reads)
     BOWTIE2(ch_reads, ch_ref)
     FASTP_POST_DEHOST(BOWTIE2.out.non_host)
