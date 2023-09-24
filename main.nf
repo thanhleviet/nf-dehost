@@ -154,7 +154,7 @@ workflow wf_fastqMergeLanes {
 
 ch_input = Channel.fromPath(params.sample_sheet, checkIfExists: true)
     .splitCsv(header: true)
-    .map { row -> tuple(row.sample_id, row.R1, row.R2) }
+    .map { row -> tuple(row.sample_id, [row.R1, row.R2]) }
 
 ch_ref = Channel.fromPath(params.ref + "*.bt2", checkIfExists: true)
                 .collect()
