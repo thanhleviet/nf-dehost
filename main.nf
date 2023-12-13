@@ -141,9 +141,10 @@ workflow wf_fastqMergeLanes {
   main:
     // Group 4 lane elements into 1 element in the channel
     ch_filePairs
-            .map {
-            it -> [it[0].replaceAll(~/\_L00[1,2,3,4]/,""), it[1], it[2]]
-            }
+            // .map {
+            // it -> [it[0].replaceAll(~/\_L00[1,2,3,4]/,""), it[1], it[2]]
+            // }
+            .map {it -> [it[0],it[1][0],it[1][1]]}
             .groupTuple(by:0)
             .set { ch_reads_four_lanes }
 

@@ -33,21 +33,30 @@ def main():
         for filepath in filepaths:
             if not os.path.exists(filepath):
                 raise ValueError(f"File not found: {filepath}")
-
+    # print(files)
     # Write the list of files to a new CSV file
     with open(args.output, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["sample_id", "R1", "R2"])
         for sample_id, filepaths in files.items():
+            # Sort the file paths by name
+            filepaths.sort()
+            # print(sample_id, filepaths)
             # Check if there are two files with the same sample ID
             if len(filepaths) == 2:
-                # Sort the file paths by name
-                filepaths.sort()
                 # Determine which file is R1 and which is R2
                 r1_path = filepaths[0] if filepaths[0].endswith("_1.fq.gz") else filepaths[1]
                 r2_path = filepaths[1] if filepaths[1].endswith("_2.fq.gz") else filepaths[0]
                 # Write the row to the CSV file
+                print(sample_id, r1_path, r2_path)
                 writer.writerow([sample_id, r1_path, r2_path])
-
+            elif len(filepaths) == 4:
+                for i in range(1,3):
+                    # Determine which file is R1 and which is R2
+                    _index = i if i == 2 else 0
+                    r1_path = filepaths[0+_index] if filepaths[0].endswith("_1.fq.gz") else filepaths[1]
+                    r2_path = filepaths[1+_index] if filepaths[1].endswith("_2.fq.gz") else filepaths[0]
+                    # print(sample_id,r1_path,r2_path)
+                    writer.writerow([sample_id, r1_path, r2_path])
 if __name__ == "__main__":
     main()
