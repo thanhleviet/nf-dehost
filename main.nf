@@ -77,7 +77,7 @@ process MULTIQC {
     
     label "CHANGE_ME"
     
-    conda "bioconda::multiqc=1.14.0"
+    conda "conda-forge::python=3.11 bioconda::multiqc=1.14.0"
     
     tag {"Running"}
     
