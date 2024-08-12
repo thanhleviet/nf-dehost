@@ -4,7 +4,7 @@ import csv
 import argparse
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Scan a folder for paired-end FASTQ files and generate a sample sheet in CSV format.")
+    parser = argparse.ArgumentParser(description="Scan a folder for paired-end FASTQ files and generate a sample sheet in CSV format (written for Novogene folder structure).")
     parser.add_argument("path", help="The path to the folder to scan.")
     parser.add_argument("output", help="The path to the output CSV file.")
     return parser.parse_args()

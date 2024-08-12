@@ -66,7 +66,7 @@ process BOWTIE2 {
     tuple val(sample_id), path("*.non_host.fastq.gz"), emit: non_host
 
     script:
-    ref_basename = ref[0].getSimpleName()
+    ref_basename = ref[0].getBaseName().replaceFirst(/\.[1-4]$/, "")
     """
     bowtie2 --very-sensitive-local -x ${ref_basename} -1 ${reads[0]} -2 ${reads[1]} -p ${task.cpus} | samtools fastq -@ ${task.cpus} -1 ${sample_id}_1.non_host.fastq -2 ${sample_id}_2.non_host.fastq -0 /dev/null -s /dev/null -n -f 4 -
     pigz -p ${task.cpus} *.non_host.fastq
@@ -96,6 +96,43 @@ process MULTIQC {
     multiqc .
     """
 }
+
+process HOSTTILE {
+    
+    label "CHANGE_ME"
+    
+    conda "bioconda::hostile=1.1.0"
+
+    tag {sample_id}
+    
+    cpus 8
+
+    input:
+    tuple val(sample_id), path(reads)
+
+    output:
+    tuple val(sample_id), path("${sample_id}")
+    path("${sample_id}.log"), emit: logs
+    path "versions.yml"                                 , emit: versions
+    
+    script:
+    def aligner_args = task.ext.aligner_args ?: ""
+    """
+    hostile clean --offline \
+    --fastq1 ${reads[0]} \
+    --fastq2 ${reads[1]} \
+    --out-dir ${sample_id} \
+    --threads ${task.cpus} \
+    --index ${params.hostile_index} \
+    ${aligner_args} > ${sample_id}.log
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+      hostile: `(hostile --version)`
+    END_VERSIONS
+    """
+}
+
 
 process fastqMergeLanes {
   publishDir "${params.outdir}/${task.process.replaceAll(":","_")}", mode: 'copy'
@@ -173,10 +210,13 @@ workflow {
     } else {
         ch_reads = ch_input
     }
-
-    FASTP_PRE_DEHOST(ch_reads)
-    BOWTIE2(ch_reads, ch_ref)
-    FASTP_POST_DEHOST(BOWTIE2.out.non_host)
-    ch_multiqc = FASTP_PRE_DEHOST.out.logs.map{it[1]}.collect().combine(FASTP_POST_DEHOST.out.logs.map{it[1]}.collect())
-    MULTIQC(ch_multiqc)
+    if (params.use_hostile) {
+        HOSTTILE(ch_reads)
+    } else {
+        FASTP_PRE_DEHOST(ch_reads)
+        BOWTIE2(ch_reads, ch_ref)
+        FASTP_POST_DEHOST(BOWTIE2.out.non_host)
+        ch_multiqc = FASTP_PRE_DEHOST.out.logs.map{it[1]}.collect().combine(FASTP_POST_DEHOST.out.logs.map{it[1]}.collect())
+        MULTIQC(ch_multiqc)
+    }
 }
