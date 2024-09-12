@@ -2,7 +2,9 @@
 import os
 import csv
 import argparse
+import logging
 
+logging.basicConfig(level=logging.INFO)
 def parse_args():
     parser = argparse.ArgumentParser(description="Scan a folder for paired-end FASTQ files and generate a sample sheet in CSV format (written for Novogene folder structure).")
     parser.add_argument("path", help="The path to the folder to scan.")
@@ -19,6 +21,7 @@ def main():
     for root, dirs, filenames in os.walk(args.path):
         for filename in filenames:
             if filename.endswith(".fq.gz"):
+                logging.info(f"Found file: {filename}")
                 filepath = os.path.join(root, filename)
                 # Extract the sample ID from the folder name
                 sample_id = os.path.basename(root)
@@ -27,7 +30,7 @@ def main():
                     files[sample_id].append(filepath)
                 else:
                     files[sample_id] = [filepath]
-
+    logging.info(f"Found {len(files)} samples.")
     # Verify that all files exist
     for filepaths in files.values():
         for filepath in filepaths:
@@ -41,22 +44,25 @@ def main():
         for sample_id, filepaths in files.items():
             # Sort the file paths by name
             filepaths.sort()
-            # print(sample_id, filepaths)
-            # Check if there are two files with the same sample ID
-            if len(filepaths) == 2:
+            print(f"Sample ID: {sample_id}, Number of files: {len(filepaths)}")
+
+            # Group files into pairs (R1 and R2)
+            for i in range(0, len(filepaths), 2):
+                if i + 1 < len(filepaths):
                 # Determine which file is R1 and which is R2
-                r1_path = filepaths[0] if filepaths[0].endswith("_1.fq.gz") else filepaths[1]
-                r2_path = filepaths[1] if filepaths[1].endswith("_2.fq.gz") else filepaths[0]
+                    if filepaths[i].endswith("_1.fq.gz") and filepaths[i+1].endswith("_2.fq.gz"):
+                        r1_path, r2_path = filepaths[i], filepaths[i+1]
+                    elif filepaths[i].endswith("_2.fq.gz") and filepaths[i+1].endswith("_1.fq.gz"):
+                        r1_path, r2_path = filepaths[i+1], filepaths[i]
+                    else:
+                        print(f"Warning: Unexpected file naming for {sample_id}: {filepaths[i]}, {filepaths[i+1]}")
+                        continue
                 # Write the row to the CSV file
-                print(sample_id, r1_path, r2_path)
-                writer.writerow([sample_id, r1_path, r2_path])
-            elif len(filepaths) == 4:
-                for i in range(1,3):
-                    # Determine which file is R1 and which is R2
-                    _index = i if i == 2 else 0
-                    r1_path = filepaths[0+_index] if filepaths[0].endswith("_1.fq.gz") else filepaths[1]
-                    r2_path = filepaths[1+_index] if filepaths[1].endswith("_2.fq.gz") else filepaths[0]
-                    # print(sample_id,r1_path,r2_path)
+                    print(f"Writing: {sample_id}, {r1_path}, {r2_path}")
                     writer.writerow([sample_id, r1_path, r2_path])
+                else:
+                    # Handle the case of an odd number of files
+                    print(f"Warning: Unpaired file for {sample_id}: {filepaths[i]}")
+                    writer.writerow([sample_id, filepaths[i], ""])
 if __name__ == "__main__":
     main()
