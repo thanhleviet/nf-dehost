@@ -5,6 +5,8 @@ process FASTQC {
     
     label "CHANGE_ME"
     
+    time '1h'
+
     conda "bioconda::fastqc"
     
     tag {sample_id}
@@ -27,6 +29,8 @@ process FASTP {
     
     label "CHANGE_ME"
     
+    time '1h'
+
     conda "bioconda::fastp"
 
     tag {sample_id}
@@ -52,6 +56,9 @@ process FASTP {
 process BOWTIE2 {
     
     label "CHANGE_ME"
+    
+    time { task.attempt > 1 ? '24h' : '2h' }
+
     conda "bioconda::bowtie2=2.5.1 bioconda::samtools"
     
     tag {sample_id}
@@ -77,6 +84,8 @@ process MULTIQC {
     
     label "CHANGE_ME"
     
+    time '1h'
+
     conda "conda-forge::python=3.11 bioconda::multiqc=1.14.0"
     
     tag {"Running"}
@@ -101,6 +110,8 @@ process HOSTTILE {
     
     label "CHANGE_ME"
     
+    time { task.attempt > 1 ? '24h' : '2h' }
+
     conda "bioconda::hostile=1.1.0"
 
     tag {sample_id}
@@ -138,6 +149,9 @@ process fastqMergeLanes {
   publishDir "${params.outdir}/${task.process.replaceAll(":","_")}", mode: 'copy'
 
   tag { sampleName }
+
+  time '1h'
+
   cpus 8 
   
   input:
