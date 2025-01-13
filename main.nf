@@ -108,7 +108,11 @@ process MULTIQC {
 
 process HOSTTILE {
     
-    label "CHANGE_ME"
+    label "localssd"
+
+    clusterOptions "--localscratch=ssd:30"
+    
+    scratch '$SLURM_LOCAL_SCRATCH'
     
     time { task.attempt > 1 ? '24h' : '2h' }
 
@@ -117,6 +121,8 @@ process HOSTTILE {
     tag {sample_id}
     
     cpus 8
+
+    memory {task.attempt * task.cpus * 6.GB }
 
     input:
     tuple val(sample_id), path(reads)
@@ -147,6 +153,8 @@ process HOSTTILE {
 
 process fastqMergeLanes {
   publishDir "${params.outdir}/${task.process.replaceAll(":","_")}", mode: 'copy'
+  clusterOptions "--localscratch=ssd:20" //Reset clusterOptions to default
+  scratch '$SLURM_LOCAL_SCRATCH'
 
   tag { sampleName }
 
@@ -165,6 +173,25 @@ process fastqMergeLanes {
   zcat $forward | pigz -p ${task.cpus} - > ${sampleName}_R1.fastq.gz
   zcat $reverse | pigz -p ${task.cpus} - > ${sampleName}_R2.fastq.gz
   """
+}
+
+process HUMAN_REMOVED_REPORT {
+    
+    label "CHANGE_ME"
+    
+    tag {"Running"}
+    
+    cpus 4
+
+    input:
+    path(hostile_log)
+    output:
+    path("hostile_report.csv")
+
+    script:
+    """
+    read_hostile_report.py --format csv \$PWD hostile_report.csv
+    """
 }
 
 workflow FASTP_PRE_DEHOST {
@@ -207,6 +234,7 @@ workflow wf_fastqMergeLanes {
 ch_input = Channel.fromPath(params.sample_sheet, checkIfExists: true)
     .splitCsv(header: true)
     .map { row -> tuple(row.sample_id, [row.R1, row.R2]) }
+    .filter { !(it[0] =~ /.*Undetermined.*/) }
 
 ch_ref = Channel.fromPath(params.ref + "*.bt2", checkIfExists: true)
                 .collect()
@@ -226,6 +254,7 @@ workflow {
     }
     if (params.use_hostile) {
         HOSTTILE(ch_reads)
+        HUMAN_REMOVED_REPORT(HOSTTILE.out.logs.collect())
     } else {
         FASTP_PRE_DEHOST(ch_reads)
         BOWTIE2(ch_reads, ch_ref)
