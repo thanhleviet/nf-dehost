@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import os
 import json
 import csv
@@ -14,11 +15,11 @@ def process_log_files(log_directory, output_file, output_format):
     data = []
 
     for filename in os.listdir(log_directory):
-        if filename.endswith(".log"):
+        if filename.endswith(".log") and (".command" not in filename):
             file_path = os.path.join(log_directory, filename)
             with open(file_path, "r") as file:
                 log_content = file.read()
-
+            # print(f"File: {filename}")
             json_content = extract_json_content(log_content)
             log_data = json.loads(json_content)
 
